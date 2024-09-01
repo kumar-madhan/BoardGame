@@ -1,11 +1,17 @@
 pipeline {
-    agent any
+    agent {label 'Build-Node'}
 
     environment {
         SONARQUBE = 'SonarQube'
-        DOCKER_REGISTRY = '192.168.10.17:9092/artifactory/docker/'
+        DOCKER_REGISTRY = '192.168.10.16:9092/artifactory/docker'
+        DOCKER_REPO = "kumarmadhan/my-java-app"
     }
-
+    
+    tools {
+        maven 'Maven3'
+        dockerTool  'Docker'
+    }
+    
     stages {
         stage('Checkout') {
             steps {
@@ -16,9 +22,9 @@ pipeline {
         stage('Sonarqube-Analysis') {
             steps {
                 script{
-                    def ScannerHome = tool 'SonarQube Scanner'
+                    // def ScannerHome = tool 'SonarQube Scanner'
                     withSonarQubeEnv('SonarQube') {
-                        sh '${ScannerHome}/bin/sonar-scanner'
+                        sh 'sonar-scanner'
                     }
                 }
             }
@@ -63,11 +69,33 @@ pipeline {
             }
         }
 
-        stage('Containerize Application') {
+        stage('Build Docker Image') {
             steps {
                 script {
-                    docker.build("${DOCKER_REGISTRY}/my-java-app:${env.BUILD_ID}")
-                    docker.push("${DOCKER_REGISTRY}/my-java-app:${env.BUILD_ID}")
+                    // Build the Docker image
+                    dockerImage = docker.build("${DOCKER_REPO}:${BUILD_NUMBER}")
+                }
+            }
+        }
+        
+        stage('Tag Docker Image') {
+            steps {
+                script {
+                    // Tag the image with "latest"
+                    sh "docker tag ${DOCKER_REPO}:${BUILD_NUMBER} ${DOCKER_REPO}:latest"
+                }
+            }
+        }
+        
+        stage('Push Docker Images') {
+            steps {
+                script {
+                    docker.withRegistry('', "${DOCKER_CREDENTIALS_ID}") {
+                        // Push the build number tagged image
+                        dockerImage.push("${BUILD_NUMBER}")
+                        // Push the "latest" tagged image
+                        dockerImage.push("latest")
+                    }
                 }
             }
         }
@@ -138,10 +166,14 @@ pipeline {
         //     }
         // }
     }
-
     post {
         always {
             cleanWs()
+            // Clean up the Docker environment after the build
+            script {
+                sh "docker rmi ${DOCKER_REPO}:${BUILD_NUMBER} || true"
+                sh "docker rmi ${DOCKER_REPO}:latest || true"
+            }
         }
     }
 }
