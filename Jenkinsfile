@@ -1,15 +1,10 @@
 pipeline {
-    agent {label 'Build-Node'}
+    agent {label 'node'}
 
     environment {
-        SONARQUBE = 'SonarQube'
+        SONARQUBE = 'sonarqube'
         DOCKER_REGISTRY = '192.168.10.16:9092/artifactory/docker'
         DOCKER_REPO = "kumarmadhan/my-java-app"
-    }
-    
-    tools {
-        maven 'Maven3'
-        dockerTool  'Docker'
     }
     
     stages {
@@ -23,7 +18,7 @@ pipeline {
             steps {
                 script{
                     // def ScannerHome = tool 'SonarQube Scanner'
-                    withSonarQubeEnv('SonarQube') {
+                    withSonarQubeEnv('sonarqube') {
                         sh 'sonar-scanner'
                     }
                 }
@@ -32,10 +27,8 @@ pipeline {
 
         stage('OWASP Dependency-Check Scan') {
             steps {
-                dir('myapp') {
-                    dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'Dependency-Check'
-                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-                }
+                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'Dependency-Check'
+                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
             }
         }
 
